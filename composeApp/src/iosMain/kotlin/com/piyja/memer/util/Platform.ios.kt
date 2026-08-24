@@ -1,35 +1,60 @@
 package com.piyja.memer.util
 
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toImageBitmap
-import kotlinx.cinterop.CValue
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.useContents
+import kotlinx.cinterop.usePinned
+import org.jetbrains.skia.Image
 import platform.CoreGraphics.CGRect
 import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.CGSize
 import platform.CoreGraphics.CGSizeMake
 import platform.Foundation.NSBundle
+import platform.Foundation.NSData
+import platform.Foundation.NSDate
 import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSFileManager
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSString
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.create
+import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.writeToFile
-import platform.Foundation.atomically
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIFont
-import platform.UIKit UIGraphicsBeginImageContextWithOptions
+import platform.UIKit.UIGraphicsBeginImageContextWithOptions
 import platform.UIKit.UIGraphicsEndImageContext
 import platform.UIKit.UIGraphicsGetImageFromCurrentImageContext
 import platform.UIKit.UIImage
+import platform.UIKit.UIImageJPEGRepresentation
 import platform.UIKit.UIPasteboard
-import platform.UIKit.drawString
+import platform.UIKit.drawAtPoint
+import platform.UIKit.sizeWithAttributes
+import platform.posix.memcpy
+
+@OptIn(ExperimentalForeignApi::class)
+internal fun NSData.toByteArray(): ByteArray {
+    val size = length.toInt()
+    val bytes = ByteArray(size)
+    if (size > 0) {
+        bytes.usePinned { pinned ->
+            memcpy(pinned.addressOf(0), this.bytes, this.length)
+        }
+    }
+    return bytes
+}
 
 @OptIn(ExperimentalForeignApi::class)
 actual typealias PlatformBitmap = UIImage
 
 actual fun loadTemplateBitmap(assetPath: String): PlatformBitmap {
+    if (assetPath.startsWith("/")) {
+        return UIImage.imageWithContentsOfFile(assetPath)
+            ?: throw NullPointerException("Template image not found at $assetPath")
+    }
     val fileName = assetPath.substringAfterLast('/').substringBeforeLast('.')
     return UIImage.imageNamed(fileName)
         ?: throw NullPointerException("Template image '$fileName' not found in bundle")
@@ -38,12 +63,8 @@ actual fun loadTemplateBitmap(assetPath: String): PlatformBitmap {
 @OptIn(ExperimentalForeignApi::class)
 actual fun renderMeme(
     bitmap: PlatformBitmap,
-    topText: String,
-    bottomText: String
+    texts: List<PositionedText>
 ): PlatformBitmap {
-    val formattedTop = MemeText.formatMemeText(topText)
-    val formattedBottom = MemeText.formatMemeText(bottomText)
-
     val width = bitmap.size.useContents { width }
     val height = bitmap.size.useContents { height }
 
@@ -52,20 +73,23 @@ actual fun renderMeme(
     try {
         bitmap.drawInRect(CGRectMake(0.0, 0.0, width, height))
 
-        if (formattedTop.isNotEmpty()) {
-            val topSize = MemeText.calculateTextSize(width.toInt(), formattedTop) { text, size ->
-                val font = UIFont.boldSystemFontOfSize(size.toDouble())
-                NSString.create(string = text).sizeWithFont(font).width.toFloat()
-            }
-            drawMemeText(formattedTop, topSize, width, 0f)
-        }
+        texts.filter { it.text.isNotBlank() }.forEach { positioned ->
+            val formatted = MemeText.formatMemeText(positioned.text)
+            if (formatted.isEmpty()) return@forEach
 
-        if (formattedBottom.isNotEmpty()) {
-            val bottomSize = MemeText.calculateTextSize(width.toInt(), formattedBottom) { text, size ->
+            val fontSize = MemeText.calculateTextSize(width.toInt(), formatted) { text, size ->
                 val font = UIFont.boldSystemFontOfSize(size.toDouble())
-                NSString.create(string = text).sizeWithFont(font).width.toFloat()
+                NSString.create(string = text)
+                    .sizeWithAttributes(mapOf<Any?, Any>(platform.UIKit.NSFontAttributeName to font))
+                    .useContents { width }
+                    .toFloat()
             }
-            drawMemeText(formattedBottom, bottomSize, width, height.toFloat() - bottomSize - 10f)
+            drawCenteredMemeText(
+                text = formatted,
+                fontSize = fontSize,
+                centerX = positioned.xRatio * width,
+                centerY = positioned.yRatio * height
+            )
         }
 
         return UIGraphicsGetImageFromCurrentImageContext()
@@ -76,48 +100,56 @@ actual fun renderMeme(
 }
 
 @OptIn(ExperimentalForeignApi::class)
-private fun drawMemeText(text: String, fontSize: Float, imageWidth: Float, y: Float) {
+private fun drawCenteredMemeText(text: String, fontSize: Float, centerX: Double, centerY: Double) {
     val font = UIFont.boldSystemFontOfSize(fontSize.toDouble())
     val nsText = NSString.create(string = text)
-    val attrs = mapOf(
+
+    val measureAttrs = mapOf<Any?, Any>(platform.UIKit.NSFontAttributeName to font)
+    val textSize = nsText.sizeWithAttributes(measureAttrs).useContents { Pair(width, height) }
+
+    val attrs = mapOf<Any?, Any>(
         platform.UIKit.NSForegroundColorAttributeName to platform.UIKit.UIColor.whiteColor,
         platform.UIKit.NSStrokeColorAttributeName to platform.UIKit.UIColor.blackColor,
-        platform.UIKit.NSStrokeWidthAttributeName to -3.0,
+        platform.UIKit.NSStrokeWidthAttributeName to -4.0,
         platform.UIKit.NSFontAttributeName to font
     )
-    val textWidth = nsText.sizeWithAttributes(attrs).width
-    val x = (imageWidth.toDouble() - textWidth) / 2.0
-    nsText.drawAtPoint(platform.CoreGraphics.CGPointMake(x, y.toDouble()), withAttributes = attrs)
+
+    val x = centerX - (textSize.first / 2.0)
+    val y = centerY - (textSize.second / 2.0)
+    nsText.drawAtPoint(platform.CoreGraphics.CGPointMake(x, y), withAttributes = attrs)
 }
 
 @OptIn(ExperimentalForeignApi::class)
 actual fun platformBitmapToImageBitmap(bitmap: PlatformBitmap): ImageBitmap {
-    return bitmap.toImageBitmap()
-}
-
-actual fun saveMemeImage(bitmap: PlatformBitmap): String {
-    val paths = NSSearchPathForDirectoriesInDomains(
-        NSDocumentDirectory,
-        NSUserDomainMask,
-        true
-    )
-    val documentsDir = paths.firstOrNull() as? String ?: throw IllegalStateException("No Documents dir")
-    val memesDirPath = "$documentsDir/memes"
-
-    val nsMemesDir = platform.Foundation.NSFileManager.defaultManager
-    if (!nsMemesDir.fileExistsAtPath(memesDirPath)) {
-        nsMemesDir.createDirectoryAtPath(memesDirPath, withIntermediateDirectories = true, attributes = null, null)
-    }
-
-    val fileName = MemeFileNaming.generateFileName(platform.Foundation.NSDate.date().timeIntervalSince1970().toLong() * 1000)
-    val filePath = "$memesDirPath/$fileName"
-
     val data = UIImageJPEGRepresentation(bitmap, 0.9)
         ?: throw IllegalStateException("Failed to encode image")
-    data.writeToFile(filePath, atomically = true)
-
-    return filePath
+    return Image.makeFromEncoded(data.toByteArray()).toComposeImageBitmap()
 }
+
+@OptIn(ExperimentalForeignApi::class)
+private fun persistJpeg(bitmap: PlatformBitmap, subdirectory: String): String? {
+    val paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true)
+    val documentsDir = paths.firstOrNull() as? String ?: return null
+    val targetDir = "$documentsDir/$subdirectory"
+
+    val fm = NSFileManager.defaultManager
+    if (!fm.fileExistsAtPath(targetDir)) {
+        fm.createDirectoryAtPath(targetDir, withIntermediateDirectories = true, attributes = null, null)
+    }
+
+    val fileName = MemeFileNaming.generateFileName((NSDate().timeIntervalSince1970 * 1000.0).toLong())
+    val filePath = "$targetDir/$fileName"
+
+    val data = UIImageJPEGRepresentation(bitmap, 0.9) ?: return null
+    return if (data.writeToFile(filePath, atomically = true)) filePath else null
+}
+
+actual fun saveMemeToGallery(bitmap: PlatformBitmap): String? =
+    persistJpeg(bitmap, "memes")
+
+actual fun stageShareableImage(bitmap: PlatformBitmap): String =
+    persistJpeg(bitmap, "shared_memes")
+        ?: throw IllegalStateException("Failed to stage image for sharing")
 
 @OptIn(ExperimentalForeignApi::class)
 actual fun shareMemeImage(filePath: String) {

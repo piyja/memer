@@ -3,15 +3,17 @@
 A simple meme generator app built with **Kotlin Multiplatform (KMP)** + **Compose Multiplatform**.
 Runs on both **Android** and **iOS** from a single shared codebase.
 
-The user picks a template image, types top/bottom text, sees a live preview, then
-**Save**, **Share**, or **Copy** the rendered meme.
+The user picks or imports a template image, adds any number of draggable text
+boxes, sees a live preview, then **Save**, **Share**, or **Copy** the rendered meme.
 
 ## Features
 
-- Template picker (grid of meme templates)
-- Editor with top & bottom text input and live preview
+- Template picker (grid of meme templates) with thumbnails
+- Import templates from the device photo gallery (Android Photo Picker / iOS photo library)
+- Editor with multiple draggable text boxes, live preview, and a **Reset** button
+- Per-template layouts autosave and restore when you re-enter the editor
 - Classic meme text style (white fill, black stroke, bold uppercase)
-- Save to app-private storage (does **not** pollute the system gallery)
+- Save straight into the system photo gallery
 - Share to chat apps (WhatsApp, Telegram, Signal, etc.) via the system share sheet
 - Copy image to clipboard for pasting into chats
 
@@ -134,26 +136,32 @@ shared across platforms:
 ./gradlew :composeApp:testDebugUnitTest
 ```
 
-Current test suites (26 tests, all passing):
+Current test suites (34 tests, all passing):
 - `MemeTemplateTest` — data model equality/copy
-- `TemplateCatalogTest` — default catalog contents and integrity
+- `TemplateCatalogTest` — default catalog contents, custom template registration
 - `MemeTextTest` — text formatting (uppercase, trimming, special chars)
 - `MemeFileNamingTest` — generated file name format and uniqueness
+- `MemeTextBoxTest` — positioned-text mapping and blank-box filtering
+- `TemplateStateCodecTest` — encode/decode round trip of saved layouts
 
 ## How saving / sharing / copying works
 
-- **Save** — renders the meme at full resolution and writes a JPEG to
-  app-private storage:
-  - Android: `getExternalFilesDir(Pictures)/memes/`
-  - iOS: `Documents/memes/`
-  No storage permissions are required and files do **not** appear in the system
-  gallery. They are removed when the app is uninstalled.
-- **Share** — uses the platform share sheet:
-  - Android: `Intent.ACTION_SEND` + `FileProvider`
+- **Save** — renders the meme at full resolution and inserts it into the system
+  photo gallery:
+  - Android: `MediaStore` (`Pictures/Memer`); no permissions needed on API 29+,
+    legacy `WRITE_EXTERNAL_STORAGE` only on API ≤ 28
+  - iOS: `Documents/memes/` (Photos-framework integration pending Xcode setup)
+- **Share** — renders to a staging file and hands it to the platform share sheet:
+  - Android: staged under `cacheDir/shared_memes/`, then `Intent.ACTION_SEND`
+    + `FileProvider`
   - iOS: `UIActivityViewController`
 - **Copy** — copies the image so it can be pasted in chat apps:
   - Android: `ClipboardManager` with a content URI
   - iOS: `UIPasteboard` with the `UIImage`
+
+Text-box layouts are stored per template (Android: `filesDir/templates_state/`,
+iOS: `Documents/templates_state/`) as Base64-encoded records, debounced while
+editing and flushed when leaving the editor. **Reset** clears the saved layout.
 
 ## Maintaining both platforms
 
