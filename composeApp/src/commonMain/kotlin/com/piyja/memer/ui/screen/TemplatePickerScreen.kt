@@ -1,5 +1,6 @@
 package com.piyja.memer.ui.screen
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,14 +24,24 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.piyja.memer.data.MemeTemplate
 import com.piyja.memer.data.TemplateCatalog
+import com.piyja.memer.util.GalleryImagePicker
+import com.piyja.memer.util.loadTemplateBitmap
+import com.piyja.memer.util.platformBitmapToImageBitmap
+import com.piyja.memer.util.rememberGalleryImagePicker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +50,7 @@ fun TemplatePickerScreen(
     modifier: Modifier = Modifier
 ) {
     val templates = TemplateCatalog.getTemplates()
+    val galleryPicker: GalleryImagePicker = rememberGalleryImagePicker()
 
     Scaffold(
         modifier = modifier,
@@ -45,17 +58,40 @@ fun TemplatePickerScreen(
             TopAppBar(title = { Text("Memer") })
         }
     ) { padding ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(padding)
         ) {
-            items(templates) { template ->
-                TemplateCard(template = template, onClick = { onTemplateSelected(template) })
+            Button(
+                onClick = {
+                    galleryPicker.launch { path ->
+                        if (path != null) {
+                            TemplateCatalog.addCustomTemplate(
+                                name = path.substringAfterLast('/').substringBeforeLast('.'),
+                                imagePath = path
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text("+ Add from gallery")
+            }
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(templates) { template ->
+                    TemplateCard(template = template, onClick = { onTemplateSelected(template) })
+                }
             }
         }
     }
@@ -87,6 +123,11 @@ private fun TemplateCard(template: MemeTemplate, onClick: () -> Unit) {
                     style = MaterialTheme.typography.headlineMedium,
                     color = Color.Gray
                 )
+                AsyncTemplateImage(
+                    imageSource = template.imageAssetName,
+                    contentDescription = template.name,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             Text(
                 text = template.name,
@@ -97,5 +138,30 @@ private fun TemplateCard(template: MemeTemplate, onClick: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun AsyncTemplateImage(
+    imageSource: String,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, imageSource) {
+        value = try {
+            val loaded = withContext(Dispatchers.Default) { loadTemplateBitmap(imageSource) }
+            platformBitmapToImageBitmap(loaded)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    bitmap?.let { img ->
+        Image(
+            bitmap = img,
+            contentDescription = contentDescription,
+            modifier = modifier,
+            contentScale = ContentScale.Crop
+        )
     }
 }

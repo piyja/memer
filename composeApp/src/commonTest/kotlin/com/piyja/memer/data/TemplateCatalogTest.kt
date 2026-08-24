@@ -15,9 +15,9 @@ class TemplateCatalogTest {
     }
 
     @Test
-    fun `getDefaultTemplates returns five templates`() {
+    fun `getDefaultTemplates returns one template`() {
         val templates = TemplateCatalog.getDefaultTemplates()
-        assertEquals(5, templates.size)
+        assertEquals(1, templates.size)
     }
 
     @Test
@@ -62,9 +62,27 @@ class TemplateCatalogTest {
     }
 
     @Test
-    fun `getDefaultTemplates contains Drake template`() {
+    fun `getDefaultTemplates contains No Yes template`() {
         val templates = TemplateCatalog.getDefaultTemplates()
-        val drake = templates.find { it.name == "Drake" }
-        assertNotNull("Drake template should exist in defaults", drake)
+        val noYes = templates.find { it.name == "No Yes" }
+        assertNotNull("No Yes template should exist in defaults", noYes)
+    }
+
+    @Test
+    fun `addCustomTemplate appends to getTemplates`() {
+        val before = TemplateCatalog.getTemplates().size
+        val added = TemplateCatalog.addCustomTemplate("My Pic", "/data/user/0/pic1.jpg")
+
+        assertTrue(
+            "getTemplates should contain the custom template",
+            TemplateCatalog.getTemplates().contains(added)
+        )
+        assertEquals(before + 1, TemplateCatalog.getTemplates().size)
+        assertEquals("My Pic", added.name)
+        assertEquals("/data/user/0/pic1.jpg", added.imageAssetName)
+        assertFalse(
+            "defaults must stay untouched",
+            TemplateCatalog.getDefaultTemplates().contains(added)
+        )
     }
 }

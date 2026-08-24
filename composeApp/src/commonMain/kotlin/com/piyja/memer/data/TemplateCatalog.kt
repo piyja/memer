@@ -1,16 +1,27 @@
 package com.piyja.memer.data
 
+import androidx.compose.runtime.mutableStateOf
+import kotlin.random.Random
+
 object TemplateCatalog {
 
     private val defaultTemplates = listOf(
-        MemeTemplate(id = "1", name = "Drake", imageAssetName = "templates/drake.jpg"),
-        MemeTemplate(id = "2", name = "Distracted Boyfriend", imageAssetName = "templates/distracted-boyfriend.jpg"),
-        MemeTemplate(id = "3", name = "Expanding Brain", imageAssetName = "templates/expanding-brain.jpg"),
-        MemeTemplate(id = "4", name = "Mocking Spongebob", imageAssetName = "templates/mocking-spongebob.jpg"),
-        MemeTemplate(id = "5", name = "Woman Yelling at Cat", imageAssetName = "templates/woman-yelling-at-cat.jpg")
+        MemeTemplate(id = "1", name = "No Yes", imageAssetName = "templates/noYes.png")
     )
+
+    private val customTemplates = mutableStateOf(emptyList<MemeTemplate>())
 
     fun getDefaultTemplates(): List<MemeTemplate> = defaultTemplates
 
-    fun getTemplates(): List<MemeTemplate> = defaultTemplates
+    fun getTemplates(): List<MemeTemplate> = defaultTemplates + customTemplates.value
+
+    fun addCustomTemplate(name: String, imagePath: String): MemeTemplate {
+        val template = MemeTemplate(
+            id = "gallery-" + Random.nextLong().toString(16),
+            name = name,
+            imageAssetName = imagePath
+        )
+        customTemplates.value += template
+        return template
+    }
 }
