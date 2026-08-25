@@ -48,14 +48,40 @@ actual fun rememberGalleryImagePicker(): GalleryImagePicker {
     }
 }
 
+@Composable
+actual fun rememberVideoGifPicker(): GalleryImagePicker {
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) {
+            galleryCallback?.invoke(null)
+        } else {
+            GlobalScope.launch {
+                val path = withContext(Dispatchers.IO) { copyToPrivateStorage(context, uri) }
+                galleryCallback?.invoke(path)
+            }
+        }
+    }
+
+    return remember {
+        object : GalleryImagePicker {
+            override fun launch(onResult: (String?) -> Unit) {
+                galleryCallback = onResult
+                launcher.launch(arrayOf("video/*", "image/gif"))
+            }
+        }
+    }
+}
+
 private fun queryDisplayName(context: Context, uri: Uri): String? =
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
         ?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         }
 
-private fun copyToPrivateStorage(context: Context, uri: Uri): String? {
-    return try {
+private fun copyToPrivateStorage(context: Context, uri: Uri): String? {    return try {
         val dir = File(
             context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
             "user_templates"

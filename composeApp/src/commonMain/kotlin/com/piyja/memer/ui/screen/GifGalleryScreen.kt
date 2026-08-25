@@ -35,8 +35,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.piyja.memer.data.CreatedMeme
-import com.piyja.memer.data.MemeGallery
+import com.piyja.memer.data.GifGallery
+import com.piyja.memer.data.GifMeme
 import com.piyja.memer.util.loadRenderedMemeImage
 import com.piyja.memer.util.platformBitmapToImageBitmap
 import kotlinx.coroutines.Dispatchers
@@ -44,18 +44,18 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GalleryScreen(
-    onMemeSelected: (CreatedMeme) -> Unit,
+fun GifGalleryScreen(
+    onGifSelected: (GifMeme) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val memes by MemeGallery.memes
+    val memes by GifGallery.memes
 
     Scaffold(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Your Memes") },
+                title = { Text("Your GIFs") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -74,7 +74,7 @@ fun GalleryScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No memes yet — create one from a template!")
+                Text("No GIFs yet — create one from a video or GIF!")
             }
         } else {
             LazyVerticalGrid(
@@ -87,10 +87,10 @@ fun GalleryScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(memes) { meme ->
-                    GalleryCard(
+                    GifGalleryCard(
                         meme = meme,
-                        onClick = { onMemeSelected(meme) },
-                        onDelete = { MemeGallery.remove(meme.id) }
+                        onClick = { onGifSelected(meme) },
+                        onDelete = { GifGallery.remove(meme.id) }
                     )
                 }
             }
@@ -99,8 +99,8 @@ fun GalleryScreen(
 }
 
 @Composable
-private fun GalleryCard(
-    meme: CreatedMeme,
+private fun GifGalleryCard(
+    meme: GifMeme,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -116,10 +116,10 @@ private fun GalleryCard(
                     .fillMaxWidth()
                     .height(160.dp)
             ) {
-                val bitmap by produceState<ImageBitmap?>(initialValue = null, meme.imageFileName) {
+                val bitmap by produceState<ImageBitmap?>(initialValue = null, meme.thumbFileName) {
                     value = try {
                         val loaded = withContext(Dispatchers.Default) {
-                            loadRenderedMemeImage(meme.imageFileName)
+                            loadRenderedMemeImage(meme.thumbFileName)
                         }
                         loaded?.let { platformBitmapToImageBitmap(it) }
                     } catch (e: Exception) {
@@ -129,7 +129,7 @@ private fun GalleryCard(
                 bitmap?.let { img ->
                     Image(
                         bitmap = img,
-                        contentDescription = meme.templateName,
+                        contentDescription = meme.title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -141,10 +141,14 @@ private fun GalleryCard(
                     .padding(8.dp)
             ) {
                 Text(
-                    text = meme.templateName,
+                    text = meme.title,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Animated GIF",
+                    style = MaterialTheme.typography.labelSmall
                 )
                 TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.End)) {
                     Text("Remove")

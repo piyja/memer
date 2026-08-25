@@ -10,7 +10,7 @@ object TemplateStateCodec {
     fun encodeBoxes(boxes: List<MemeTextBox>): String =
         boxes.joinToString("\n") { box ->
             val encodedText = Base64.encode(box.text.encodeToByteArray())
-            "$encodedText|${box.xRatio}|${box.yRatio}|${box.scale}"
+            "$encodedText|${box.xRatio}|${box.yRatio}|${box.scale}|${box.color}|${box.bold}|${box.strike}"
         }
 
     fun decodeBoxes(raw: String?): List<MemeTextBox> {
@@ -24,7 +24,19 @@ object TemplateStateCodec {
             val x = parts[1].toFloatOrNull() ?: return@mapNotNull null
             val y = parts[2].toFloatOrNull() ?: return@mapNotNull null
             val scale = if (parts.size >= 4) parts[3].toFloatOrNull() ?: 1f else 1f
-            MemeTextBox(id = 0L, text = text, xRatio = x, yRatio = y, scale = scale)
+            val color = if (parts.size >= 5) parts[4].toLongOrNull()?.toInt() ?: 0xFFFFFFFF.toInt() else 0xFFFFFFFF.toInt()
+            val bold = if (parts.size >= 6) parts[5].toBoolean() else true
+            val strike = if (parts.size >= 7) parts[6].toBoolean() else false
+            MemeTextBox(
+                id = 0L,
+                text = text,
+                xRatio = x,
+                yRatio = y,
+                scale = scale,
+                color = color.toLong() and 0xFFFFFFFF,
+                bold = bold,
+                strike = strike
+            )
         }
     }
 }
