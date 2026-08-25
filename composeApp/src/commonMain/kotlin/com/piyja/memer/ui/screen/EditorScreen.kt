@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.piyja.memer.data.MemeTemplate
 import com.piyja.memer.data.MemeTextBox
+import com.piyja.memer.data.MemeGallery
 import com.piyja.memer.data.toPositionedTexts
 import com.piyja.memer.util.TemplateStateCodec
 import com.piyja.memer.util.clearTemplateState
@@ -78,14 +79,16 @@ private var nextTextBoxId = 1L
 fun MemeEditorScreen(
     template: MemeTemplate,
     onBack: () -> Unit,
+    initialEncodedTexts: String? = null,
+    galleryMemeId: String? = null,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val textBoxes = remember(template) {
+    val textBoxes = remember(template, galleryMemeId) {
         mutableStateListOf<MemeTextBox>().apply {
-            val restored = TemplateStateCodec.decodeBoxes(loadTemplateState(template.id))
+            val restored = TemplateStateCodec.decodeBoxes(initialEncodedTexts ?: loadTemplateState(template.id))
                 .map { it.copy(id = nextTextBoxId++) }
             if (restored.isNotEmpty()) {
                 addAll(restored)
@@ -94,10 +97,11 @@ fun MemeEditorScreen(
             }
         }
     }
-    var selectedBoxId by remember(template) { mutableStateOf(textBoxes.first().id) }
+    var selectedBoxId by remember(template, galleryMemeId) { mutableStateOf(textBoxes.first().id) }
     var imageAreaSize by remember { mutableStateOf(IntSize.Zero) }
 
     LaunchedEffect(textBoxes.toList(), template.id) {
+        if (galleryMemeId != null) return@LaunchedEffect
         delay(500)
         withContext(Dispatchers.Default) {
             saveTemplateState(template.id, TemplateStateCodec.encodeBoxes(textBoxes))
@@ -106,7 +110,9 @@ fun MemeEditorScreen(
 
     fun flushAndBack() {
         scope.launch(Dispatchers.Default) {
-            saveTemplateState(template.id, TemplateStateCodec.encodeBoxes(textBoxes))
+            if (galleryMemeId == null) {
+                saveTemplateState(template.id, TemplateStateCodec.encodeBoxes(textBoxes))
+            }
             withContext(Dispatchers.Main) { onBack() }
         }
     }
@@ -258,14 +264,21 @@ fun MemeEditorScreen(
                 Button(
                     onClick = {
                         val texts = textBoxes.toPositionedTexts()
+                        val encoded = TemplateStateCodec.encodeBoxes(textBoxes)
                         scope.launch {
                             try {
-                                val saved = withContext(Dispatchers.Default) {
+                                val savedToPhotos = withContext(Dispatchers.Default) {
                                     val base = loadTemplateBitmap(template.imageAssetName)
-                                    saveMemeToGallery(renderMeme(base, texts))
+                                    val rendered = renderMeme(base, texts)
+                                    saveMemeToGallery(rendered)
+                                    if (galleryMemeId != null) {
+                                        MemeGallery.update(galleryMemeId, template, encoded, rendered)
+                                    } else {
+                                        MemeGallery.add(template, encoded, rendered)
+                                    }
                                 }
                                 snackbarHostState.showSnackbar(
-                                    if (saved != null) "Saved to gallery" else "Couldn't save to gallery"
+                                    if (savedToPhotos != null) "Saved to your gallery" else "Couldn't save to gallery"
                                 )
                             } catch (e: Exception) {
                                 snackbarHostState.showSnackbar("Something went wrong")

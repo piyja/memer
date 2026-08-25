@@ -1,189 +1,88 @@
 # memer
 
-A simple meme generator app built with **Kotlin Multiplatform (KMP)** + **Compose Multiplatform**.
-Runs on both **Android** and **iOS** from a single shared codebase.
+A meme generator built to **practice Kotlin Multiplatform + Compose Multiplatform** end to end.
 
-The user picks or imports a template image, adds any number of draggable text
-boxes, sees a live preview, then **Save**, **Share**, or **Copy** the rendered meme.
+![Template](media/noYes.png)
 
-## Features
+Pick a template, drop in draggable text, and **Save / Share / Copy**. Every meme you
+create is kept in an in-app **gallery** with its template + text, so you can come
+back later and keep editing.
 
-- Template picker (grid of meme templates) with thumbnails
-- Import templates from the device photo gallery (Android Photo Picker / iOS photo library)
-- Editor with multiple draggable text boxes, live preview, and a **Reset** button
-- Per-template layouts autosave and restore when you re-enter the editor
-- Classic meme text style (white fill, black stroke, bold uppercase)
-- Save straight into the system photo gallery
-- Share to chat apps (WhatsApp, Telegram, Signal, etc.) via the system share sheet
-- Copy image to clipboard for pasting into chats
+## Why this project exists
 
-## Project structure
+This is a learning playground with a clear end goal:
 
-```
-memer/
-  composeApp/                       Kotlin Multiplatform module
-    src/
-      commonMain/                   Shared UI + logic (Compose Multiplatform)
-        kotlin/com/piyja/memer/
-          App.kt                    Shared app composable + navigation state
-          data/                     MemeTemplate, TemplateCatalog
-          ui/screen/                TemplatePickerScreen, MemeEditorScreen
-          ui/theme/                 Color, Type, Theme (expect)
-          util/                     MemeText, MemeFileNaming, Platform (expect)
-      androidMain/                  Android-specific implementations
-        AndroidManifest.xml
-        kotlin/com/piyja/memer/
-          MainActivity.kt           Android entry point
-          util/Platform.android.kt  actuals: Bitmap, Canvas, FileProvider, Intent, Clipboard
-        res/                        Android resources (icons, themes, strings)
-        assets/templates/           Meme template images (drop .jpg/.png here)
-      iosMain/                      iOS-specific implementations
-        kotlin/com/piyja/memer/
-          MainViewController.kt     Exposes Compose UI to Swift
-          util/Platform.ios.kt      actuals: UIImage, Core Graphics, UIPasteboard, UIActivityViewController
-          ui/theme/Theme.ios.kt     Theme actuals (no dynamic color on iOS)
-      commonTest/                   Shared unit tests (run on all platforms)
-        kotlin/com/piyja/memer/
-          data/                     MemeTemplateTest, TemplateCatalogTest
-          util/                     MemeTextTest, MemeFileNamingTest
-  iosApp/                           Thin Xcode project (Swift launcher)
-    iosApp.xcodeproj/
-    iosApp/
-      iOSApp.swift                  SwiftUI app hosting ComposeUIViewController
-      Info.plist
-      Assets.xcassets/
-```
+- **Master Compose Multiplatform** — one codebase, real UI on Android and iOS.
+- **Learn platform storage** — file system now, a local **database** (SQLDelight/Room)
+  next, then syncing.
+- **Ship to the stores** — publish the Android app **and** the iOS app to their
+  respective App Stores, going through the full release + signing flow on both.
+- **Keep both platforms first-class** — write shared logic in `commonMain`, drop to
+  `expect`/`actual` only when the OS API demands it.
 
-## Requirements
+## What you can do
 
-| Tool | Android | iOS |
+- Browse a grid of templates, or import your own from the device photo gallery.
+- Add multiple draggable, editable text boxes with the classic white-on-black meme style.
+- **Save** → stored in your device photos *and* added to the in-app gallery.
+- **My Memes** → the gallery: tap any meme to re-open it with its template + text and
+  keep editing, or remove it.
+- **Share** / **Copy** to any chat app.
+
+## Quick start
+
+| | Android | iOS |
 |---|---|---|
-| OS | Any | **macOS** (Xcode requires a Mac) |
+| OS | Any | macOS + Xcode 15+ |
 | JDK | 11+ | 11+ |
-| Android Studio | Hedgehog / Iguana+ (with KMP plugin) | — |
-| Xcode | — | 15+ |
 | Kotlin | 2.2.10 | 2.2.10 |
 
-Install the **Kotlin Multiplatform** plugin in Android Studio (Settings > Plugins)
-for the best KMP tooling support.
-
-## How to run on Android
-
-### From the command line
+**Android**
 ```bash
 ./gradlew :composeApp:assembleDebug
-```
-The APK is generated at `composeApp/build/outputs/apk/debug/composeApp-debug.apk`.
-Install on a connected device/emulator:
-```bash
 adb install composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ```
+Or open the project in Android Studio and run the `composeApp` configuration.
 
-### From Android Studio
-1. Open the project root folder.
-2. Select the `composeApp` configuration.
-3. Choose an emulator or connected device and click **Run**.
-
-## How to run on iOS
-
-> iOS builds require a **Mac** with **Xcode** installed.
-
-### From Xcode (recommended)
-1. Open `iosApp/iosApp.xcodeproj` in Xcode
-   (or open `iosApp/iosApp.xcworkspace`).
-2. Select a simulator (e.g. iPhone 15) or a connected device.
-3. Press **Cmd+R** to build and run.
-
-The Xcode project runs a "Run Script" build phase that invokes:
+**iOS** (Mac only)
 ```bash
+# builds the shared Kotlin framework
 ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
 ```
-to build the shared Kotlin framework before compiling the Swift app.
+Then open `iosApp/iosApp.xcodeproj` in Xcode and press **Cmd+R**.
 
-### From the command line (simulator)
-```bash
-./gradlew :composeApp:linkDebugExecutableIosSimulatorArm64
+## How it's built
+
+```
+composeApp/src/
+  commonMain/   shared UI + logic (Compose, data models, expect API)
+  androidMain/  Bitmap/Canvas, MediaStore, FileProvider, Clipboard
+  iosMain/      UIImage, Core Graphics, UIActivityViewController, UIPasteboard
+  commonTest/   shared unit tests (no device needed)
+iosApp/         thin Xcode project hosting the Compose view
 ```
 
-### First-time iOS setup notes
-- If Xcode prompts to update the project settings, accept.
-- Set your **Signing Team** under *Target > Signing & Capabilities*.
-- If the `ComposeApp` framework is not found, run the Gradle task above once
-  manually so the framework is generated under
-  `composeApp/build/bin/iosSimulatorArm64/debugFramework/`.
+**Storage**
+- Layouts (text boxes) are saved per template as Base64 records
+  (`filesDir/templates_state` on Android, `Documents/templates_state` on iOS),
+  autosaved while you edit and restored when you return.
+- Created memes are persisted in an in-app **gallery** (`gallery/`): each entry stores
+  the rendered image plus the template reference and encoded text, so it can be
+  re-opened and edited. This is the stepping stone toward the planned local database.
 
-## Adding meme template images
-
-Template images are loaded from the platform bundle:
-
-- **Android**: drop `.jpg`/`.png` files into
-  `composeApp/src/androidMain/assets/templates/`
-- **iOS**: add the same images to the `iosApp` target in Xcode
-  (drag them into the project navigator, ensure *Target Membership* is checked
-  for `iosApp`).
-
-Update the default list in
-`composeApp/src/commonMain/kotlin/com/piyja/memer/data/TemplateCatalog.kt`
-to match your file names, or implement platform asset scanning via
-`expect`/`actual`.
-
-## Running tests
-
-Shared unit tests run on the JVM (no device needed) and cover the pure logic
-shared across platforms:
+## Tests
 
 ```bash
 ./gradlew :composeApp:testDebugUnitTest
 ```
 
-Current test suites (34 tests, all passing):
-- `MemeTemplateTest` — data model equality/copy
-- `TemplateCatalogTest` — default catalog contents, custom template registration
-- `MemeTextTest` — text formatting (uppercase, trimming, special chars)
-- `MemeFileNamingTest` — generated file name format and uniqueness
-- `MemeTextBoxTest` — positioned-text mapping and blank-box filtering
-- `TemplateStateCodecTest` — encode/decode round trip of saved layouts
+Covers the pure shared logic: template catalog, text formatting, file naming,
+text-box mapping, and layout encode/decode round-trips.
 
-## How saving / sharing / copying works
+## Roadmap
 
-- **Save** — renders the meme at full resolution and inserts it into the system
-  photo gallery:
-  - Android: `MediaStore` (`Pictures/Memer`); no permissions needed on API 29+,
-    legacy `WRITE_EXTERNAL_STORAGE` only on API ≤ 28
-  - iOS: `Documents/memes/` (Photos-framework integration pending Xcode setup)
-- **Share** — renders to a staging file and hands it to the platform share sheet:
-  - Android: staged under `cacheDir/shared_memes/`, then `Intent.ACTION_SEND`
-    + `FileProvider`
-  - iOS: `UIActivityViewController`
-- **Copy** — copies the image so it can be pasted in chat apps:
-  - Android: `ClipboardManager` with a content URI
-  - iOS: `UIPasteboard` with the `UIImage`
-
-Text-box layouts are stored per template (Android: `filesDir/templates_state/`,
-iOS: `Documents/templates_state/`) as Base64-encoded records, debounced while
-editing and flushed when leaving the editor. **Reset** clears the saved layout.
-
-## Maintaining both platforms
-
-- Write new features in `commonMain` first. Only drop to `expect`/`actual`
-  when you need an OS-specific API.
-- Keep the `expect` surface small — every `expect` is a platform-specific
-  implementation point.
-- Shared logic tests live in `commonTest` and run on every platform.
-- The asset catalog stays unified: same template images on both platforms
-  (Android `assets/`, iOS bundle resources).
-
-## Troubleshooting
-
-**AGP / KMP conflict on Android build:**
-This project sets `android.builtInKotlin=false` and `android.newDsl=false` in
-`gradle.properties` so the standalone Kotlin Multiplatform plugin works with
-AGP 9. Do not remove these unless you migrate to AGP's built-in KMP DSL.
-
-**Kotlin/Native targets disabled on non-Mac:**
-On Linux/Windows the iOS targets are skipped automatically
-(`iosArm64`, iosSimulatorArm64, iosX64`). Use a Mac to build iOS.
-
-**iOS framework not found in Xcode:**
-Run `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` once, then
-build again in Xcode.
+- [ ] Replace file-based gallery storage with a local database
+- [ ] Template search + categories
+- [ ] Android release build + Play Store submission
+- [ ] iOS release build + App Store submission
+- [ ] Image cropping / text styling options

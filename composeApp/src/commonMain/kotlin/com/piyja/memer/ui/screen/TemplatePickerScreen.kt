@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -47,6 +48,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun TemplatePickerScreen(
     onTemplateSelected: (MemeTemplate) -> Unit,
+    onOpenGallery: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val templates = TemplateCatalog.getTemplates()
@@ -63,22 +65,33 @@ fun TemplatePickerScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Button(
-                onClick = {
-                    galleryPicker.launch { path ->
-                        if (path != null) {
-                            TemplateCatalog.addCustomTemplate(
-                                name = path.substringAfterLast('/').substringBeforeLast('.'),
-                                imagePath = path
-                            )
-                        }
-                    }
-                },
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("+ Add from gallery")
+                Button(
+                    onClick = {
+                        galleryPicker.launch { path ->
+                            if (path != null) {
+                                TemplateCatalog.addCustomTemplate(
+                                    name = path.substringAfterLast('/').substringBeforeLast('.'),
+                                    imagePath = path
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+ Add from gallery")
+                }
+                Button(
+                    onClick = onOpenGallery,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("My Memes")
+                }
             }
 
             LazyVerticalGrid(

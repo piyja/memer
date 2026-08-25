@@ -32,3 +32,16 @@ expect fun loadTemplateState(templateId: String): String?
 expect fun saveTemplateState(templateId: String, state: String)
 
 expect fun clearTemplateState(templateId: String)
+
+// Gallery of created memes (in-app, persisted)
+expect fun writeGalleryEntry(id: String, content: String)
+
+expect fun readGalleryEntry(id: String): String?
+
+expect fun listGalleryEntryIds(): List<String>
+
+expect fun deleteGalleryEntry(id: String)
+
+expect fun saveRenderedMemeImage(bitmap: PlatformBitmap, id: String): String?
+
+expect fun loadRenderedMemeImage(fileName: String): PlatformBitmap?
