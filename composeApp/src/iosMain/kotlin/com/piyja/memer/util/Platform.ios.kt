@@ -83,7 +83,7 @@ actual fun renderMeme(
                     .sizeWithAttributes(mapOf<Any?, Any>(platform.UIKit.NSFontAttributeName to font))
                     .useContents { width }
                     .toFloat()
-            }
+            } * positioned.scale
             drawCenteredMemeText(
                 text = formatted,
                 fontSize = fontSize,

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -211,6 +212,13 @@ fun MemeEditorScreen(
                                             yRatio = (it.yRatio + dy / imageAreaSize.height.coerceAtLeast(1)).coerceIn(0.02f, 0.98f)
                                         )
                                     }
+                                },
+                                onResize = { dy ->
+                                    updateBox(box.id) {
+                                        it.copy(
+                                            scale = (it.scale + dy / 200f).coerceIn(0.4f, 3f)
+                                        )
+                                    }
                                 }
                             )
                         }
@@ -335,16 +343,18 @@ private fun DraggableMemeText(
     isSelected: Boolean,
     areaSize: IntSize,
     onSelect: () -> Unit,
-    onMove: (Float, Float) -> Unit
+    onMove: (Float, Float) -> Unit,
+    onResize: (Float) -> Unit
 ) {
     val density = LocalDensity.current
     var selfSize by remember(box.id) { mutableStateOf(IntSize.Zero) }
 
-    val fontSize = if (areaSize.width > 0) {
+    val baseSize = if (areaSize.width > 0) {
         with(density) { (areaSize.width * 0.11f).toSp() }
     } else {
         22.sp
     }
+    val fontSize = baseSize * box.scale
     val strokePx = with(density) { 6f }
 
     val outlineStyle = LocalTextStyle.current.copy(
@@ -391,5 +401,20 @@ private fun DraggableMemeText(
     ) {
         Text(displayText, style = outlineStyle, modifier = Modifier.align(Alignment.Center))
         Text(displayText, style = fillStyle, modifier = Modifier.align(Alignment.Center))
+
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(28.dp)
+                    .background(Color.White.copy(alpha = 0.7f))
+                    .pointerInput(box.id) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            onResize(dragAmount.y)
+                        }
+                    }
+            )
+        }
     }
 }

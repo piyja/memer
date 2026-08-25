@@ -15,9 +15,11 @@ class TemplateCatalogTest {
     }
 
     @Test
-    fun `getDefaultTemplates returns one template`() {
+    fun `getDefaultTemplates returns the bundled templates`() {
         val templates = TemplateCatalog.getDefaultTemplates()
-        assertEquals(1, templates.size)
+        assertTrue("Default template list should have multiple bundled templates", templates.size > 1)
+        val names = templates.map { it.name }
+        assertTrue("Should include a standard meme template", "Drake Hotline Bling" in names)
     }
 
     @Test
@@ -62,10 +64,42 @@ class TemplateCatalogTest {
     }
 
     @Test
-    fun `getDefaultTemplates contains No Yes template`() {
+    fun `getDefaultTemplates does not contain removed No Yes template`() {
         val templates = TemplateCatalog.getDefaultTemplates()
         val noYes = templates.find { it.name == "No Yes" }
-        assertNotNull("No Yes template should exist in defaults", noYes)
+        assertEquals("No Yes template should be removed from defaults", null, noYes)
+    }
+
+    @Test
+    fun `search returns all templates for blank query`() {
+        val results = TemplateCatalog.search("")
+        assertEquals(TemplateCatalog.getTemplates().size, results.size)
+        assertEquals(TemplateCatalog.search("   ").size, results.size)
+    }
+
+    @Test
+    fun `search matches by name`() {
+        val results = TemplateCatalog.search("drake")
+        assertTrue("Should match Drake Hotline Bling by name", results.any { it.name == "Drake Hotline Bling" })
+    }
+
+    @Test
+    fun `search matches by tag`() {
+        val results = TemplateCatalog.search("cheating")
+        assertTrue("Should match Distracted Boyfriend via tag", results.any { it.name == "Distracted Boyfriend" })
+    }
+
+    @Test
+    fun `search narrows with multiple tokens`() {
+        val single = TemplateCatalog.search("bernie").size
+        val multi = TemplateCatalog.search("bernie asking").size
+        assertTrue("Multi-token query should be narrower or equal", multi <= single)
+        assertTrue("Should still find a Bernie template", multi > 0)
+    }
+
+    @Test
+    fun `search is case insensitive`() {
+        assertEquals(TemplateCatalog.search("DRAKE").size, TemplateCatalog.search("drake").size)
     }
 
     @Test

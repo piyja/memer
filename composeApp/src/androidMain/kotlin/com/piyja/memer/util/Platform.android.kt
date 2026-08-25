@@ -46,7 +46,7 @@ actual fun renderMeme(
 
         val textSize = MemeText.calculateTextSize(mutable.width, formatted) { text, size ->
             Paint().apply { textSize = size }.measureText(text)
-        }
+        } * positioned.scale
 
         val fillPaint = Paint().apply {
             color = Color.WHITE

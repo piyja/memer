@@ -7,7 +7,8 @@ expect class PlatformBitmap
 data class PositionedText(
     val text: String,
     val xRatio: Float,
-    val yRatio: Float
+    val yRatio: Float,
+    val scale: Float = 1f
 )
 
 expect fun loadTemplateBitmap(assetPath: String): PlatformBitmap
