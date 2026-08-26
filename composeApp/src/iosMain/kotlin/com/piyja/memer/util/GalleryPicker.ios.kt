@@ -11,12 +11,17 @@ import platform.Foundation.NSUserDomainMask
 import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.writeToFile
 import platform.UIKit.UIApplication
+import platform.UIKit.UIDocumentPickerDelegateProtocol
+import platform.UIKit.UIDocumentPickerViewController
 import platform.UIKit.UIImage
 import platform.UIKit.UIImagePickerController
 import platform.UIKit.UIImagePickerControllerDelegateProtocol
 import platform.UIKit.UIImagePickerControllerOriginalImage
 import platform.UIKit.UINavigationControllerDelegateProtocol
 import platform.UIKit.UIImageJPEGRepresentation
+import platform.UniformTypeIdentifiers.UTTypeGIF
+import platform.UniformTypeIdentifiers.UTTypeMovie
+import platform.Foundation.NSURL
 import platform.darwin.NSObject
 
 private object IOSGalleryState {
@@ -75,6 +80,54 @@ actual fun rememberGalleryImagePicker(): GalleryImagePicker {
                 IOSGalleryState.activeDelegate = delegate
 
                 val picker = UIImagePickerController()
+                picker.delegate = delegate
+                rootVc.presentViewController(picker, animated = true, completion = null)
+            }
+        }
+    }
+}
+
+private object IOSVideoGifState {
+    var activeDelegate: VideoGifDelegate? = null
+}
+
+private class VideoGifDelegate : NSObject(), UIDocumentPickerDelegateProtocol {
+
+    var onResult: ((String?) -> Unit)? = null
+
+    override fun documentPicker(
+        picker: UIDocumentPickerViewController,
+        didPickDocumentAtURL: NSURL
+    ) {
+        picker.dismissViewControllerAnimated(true, completion = null)
+        IOSVideoGifState.activeDelegate = null
+        val path = didPickDocumentAtURL.path
+        onResult?.invoke(path)
+    }
+
+    override fun documentPickerWasCancelled(picker: UIDocumentPickerViewController) {
+        picker.dismissViewControllerAnimated(true, completion = null)
+        IOSVideoGifState.activeDelegate = null
+        onResult?.invoke(null)
+    }
+}
+
+@Composable
+actual fun rememberVideoGifPicker(): GalleryImagePicker {
+    return remember {
+        object : GalleryImagePicker {
+            override fun launch(onResult: (String?) -> Unit) {
+                val rootVc = UIApplication.sharedApplication.keyWindow?.rootViewController
+                if (rootVc == null) {
+                    onResult(null)
+                    return
+                }
+                val delegate = VideoGifDelegate().apply { this.onResult = onResult }
+                IOSVideoGifState.activeDelegate = delegate
+
+                val picker = UIDocumentPickerViewController(
+                    forOpeningContentTypes = listOf(UTTypeMovie, UTTypeGIF)
+                )
                 picker.delegate = delegate
                 rootVc.presentViewController(picker, animated = true, completion = null)
             }

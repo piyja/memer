@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,12 +21,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,9 +52,11 @@ import kotlinx.coroutines.withContext
 @Composable
 fun TemplatePickerScreen(
     onTemplateSelected: (MemeTemplate) -> Unit,
+    onOpenGallery: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val templates = TemplateCatalog.getTemplates()
+    var query by remember { mutableStateOf("") }
+    val templates = TemplateCatalog.search(query)
     val galleryPicker: GalleryImagePicker = rememberGalleryImagePicker()
 
     Scaffold(
@@ -63,22 +70,52 @@ fun TemplatePickerScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Button(
-                onClick = {
-                    galleryPicker.launch { path ->
-                        if (path != null) {
-                            TemplateCatalog.addCustomTemplate(
-                                name = path.substringAfterLast('/').substringBeforeLast('.'),
-                                imagePath = path
-                            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        galleryPicker.launch { path ->
+                            if (path != null) {
+                                TemplateCatalog.addCustomTemplate(
+                                    name = path.substringAfterLast('/').substringBeforeLast('.'),
+                                    imagePath = path
+                                )
+                            }
                         }
-                    }
-                },
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+ Add from gallery")
+                }
+                Button(
+                    onClick = onOpenGallery,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("My Memes")
+                }
+            }
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("Search templates & tags…") },
+                singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text("+ Add from gallery")
+            )
+
+            if (templates.isEmpty() && query.isNotBlank()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No templates match \"$query\"")
+                }
             }
 
             LazyVerticalGrid(

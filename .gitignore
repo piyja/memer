@@ -15,3 +15,8 @@
 .cxx
 local.properties
 .kotlin
+
+# IDE / tooling / user data
+.idea/
+.mdroid/
+xcuserdata/

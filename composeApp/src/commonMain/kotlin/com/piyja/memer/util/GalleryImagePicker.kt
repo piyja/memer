@@ -8,3 +8,6 @@ interface GalleryImagePicker {
 
 @Composable
 expect fun rememberGalleryImagePicker(): GalleryImagePicker
+
+@Composable
+expect fun rememberVideoGifPicker(): GalleryImagePicker
