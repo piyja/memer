@@ -25,8 +25,10 @@ import com.piyja.memer.ui.screen.GalleryScreen
 import com.piyja.memer.ui.screen.GifGalleryScreen
 import com.piyja.memer.ui.screen.GifSourcePickerScreen
 import com.piyja.memer.ui.screen.GifVideoEditorScreen
+import androidx.compose.runtime.rememberCoroutineScope
 import com.piyja.memer.util.copyBundledGifToTempFile
 import com.piyja.memer.ui.screen.MemeEditorScreen
+import kotlinx.coroutines.launch
 import com.piyja.memer.ui.screen.TemplatePickerScreen
 
 enum class TopTab { MEME, GIF }
@@ -53,6 +55,7 @@ fun MemerApp() {
     var tab by remember { mutableStateOf(TopTab.MEME) }
     var memeScreen by remember { mutableStateOf<Screen>(Screen.Picker) }
     var gifScreen by remember { mutableStateOf<Screen>(Screen.GifSource) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         MemeGallery.load()
@@ -112,8 +115,10 @@ fun MemerApp() {
                     onPickVideoGif = { gifScreen = Screen.GifEditor(sourcePath = it) },
                     onOpenGallery = { gifScreen = Screen.GifGallery },
                     onEditSample = { name ->
-                        val path = copyBundledGifToTempFile(name)
-                        if (path != null) gifScreen = Screen.GifEditor(sourcePath = path)
+                        scope.launch {
+                            val path = copyBundledGifToTempFile(name)
+                            if (path != null) gifScreen = Screen.GifEditor(sourcePath = path)
+                        }
                     },
                     onBack = { gifScreen = Screen.GifSource },
                     modifier = Modifier.fillMaxSize()

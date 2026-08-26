@@ -58,19 +58,19 @@ expect fun getMediaInfo(path: String): MediaInfo
 /** Extract frames from [startMs] to [endMs] (inclusive) at roughly [fps] frames/sec. */
 expect fun extractFrames(path: String, startMs: Long, endMs: Long, fps: Int): List<MediaFrame>
 
-/** Names of bundled sample GIFs shipped in the app assets. */
-expect fun loadBundledGifNames(): List<String>
+/** Names of bundled sample GIFs shipped in the app resources. */
+fun loadBundledGifNames(): List<String> = listOf("digger.gif", "sample.gif")
 
 /** Raw bytes of a bundled sample GIF by [name]. */
-expect fun loadBundledGifBytes(name: String): ByteArray?
+expect suspend fun loadBundledGifBytes(name: String): ByteArray?
 
 /** Decode a GIF's bytes into animatable frames. */
 expect fun decodeGifFrames(bytes: ByteArray): List<MediaFrame>
 
 /** Copy a bundled sample GIF to a temp file and return its path (for editing). */
-expect fun copyBundledGifToTempFile(name: String): String?
+expect suspend fun copyBundledGifToTempFile(name: String): String?
 
-expect fun loadTemplateBitmap(assetPath: String): PlatformBitmap
+expect suspend fun loadTemplateBitmap(assetPath: String): PlatformBitmap
 
 expect fun renderMeme(
     bitmap: PlatformBitmap,

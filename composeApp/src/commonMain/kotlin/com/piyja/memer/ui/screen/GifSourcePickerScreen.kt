@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.piyja.memer.ui.AnimatedGifImage
 import com.piyja.memer.util.loadBundledGifBytes
 import com.piyja.memer.util.loadBundledGifNames
+import androidx.compose.runtime.produceState
 import com.piyja.memer.util.rememberVideoGifPicker
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,7 +126,7 @@ fun GifSourcePickerScreen(
                     userScrollEnabled = false
                 ) {
                     items(sampleNames) { name ->
-                        val bytes = remember(name) { loadBundledGifBytes(name) }
+                        val bytes by produceState<ByteArray?>(initialValue = null, name) { value = loadBundledGifBytes(name) }
                         Box(
                             modifier = Modifier
                                 .height(160.dp)
@@ -151,7 +152,7 @@ fun GifSourcePickerScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SampleShowWindow(name: String, onClose: () -> Unit, onEdit: () -> Unit) {
-    val bytes = remember(name) { loadBundledGifBytes(name) }
+    val bytes by produceState<ByteArray?>(initialValue = null, name) { value = loadBundledGifBytes(name) }
     Scaffold(
         topBar = {
             TopAppBar(

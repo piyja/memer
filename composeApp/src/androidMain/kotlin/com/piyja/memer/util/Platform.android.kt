@@ -21,18 +21,20 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.FileProvider
 import com.piyja.memer.util.AndroidContextHolder.appContext
+import memer.composeapp.generated.resources.Res
 import java.io.File
 import java.io.FileOutputStream
 
 actual typealias PlatformBitmap = Bitmap
 
-actual fun loadTemplateBitmap(assetPath: String): PlatformBitmap {
+actual suspend fun loadTemplateBitmap(assetPath: String): PlatformBitmap {
     if (assetPath.startsWith("/")) {
         return BitmapFactory.decodeFile(assetPath)
             ?: throw IllegalArgumentException("Failed to decode image at $assetPath")
     }
-    val input = appContext.assets.open(assetPath)
-    return BitmapFactory.decodeStream(input)
+    val bytes = Res.readBytes("files/$assetPath")
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        ?: throw IllegalArgumentException("Failed to decode image at $assetPath")
 }
 
 actual fun renderMeme(
@@ -317,19 +319,9 @@ actual fun extractFrames(path: String, startMs: Long, endMs: Long, fps: Int): Li
     return out
 }
 
-actual fun loadBundledGifNames(): List<String> {
+actual suspend fun loadBundledGifBytes(name: String): ByteArray? {
     return try {
-        appContext.assets.list("gifs")
-            ?.filter { it.endsWith(".gif", ignoreCase = true) }
-            ?: emptyList()
-    } catch (e: Exception) {
-        emptyList()
-    }
-}
-
-actual fun loadBundledGifBytes(name: String): ByteArray? {
-    return try {
-        appContext.assets.open("gifs/$name").use { it.readBytes() }
+        Res.readBytes("files/gifs/$name")
     } catch (e: Exception) {
         null
     }
@@ -357,7 +349,7 @@ actual fun decodeGifFrames(bytes: ByteArray): List<MediaFrame> {
     return out
 }
 
-actual fun copyBundledGifToTempFile(name: String): String? {
+actual suspend fun copyBundledGifToTempFile(name: String): String? {
     return try {
         val bytes = loadBundledGifBytes(name) ?: return null
         val dir = File(appContext.cacheDir, "bundled_gifs").apply { mkdirs() }

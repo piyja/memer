@@ -50,6 +50,11 @@ import platform.AVFoundation.*
 import platform.CoreMedia.*
 import platform.Foundation.NSURL
 import kotlinx.cinterop.BetaInteropApi
+import memer.composeapp.generated.resources.Res
+
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+internal fun ByteArray.toNSData(): NSData =
+    usePinned { pinned -> NSData.create(bytes = pinned.addressOf(0), length = size.toULong()) }
 
 @OptIn(ExperimentalForeignApi::class)
 internal fun NSData.toByteArray(): ByteArray {
@@ -66,14 +71,14 @@ internal fun NSData.toByteArray(): ByteArray {
 @OptIn(ExperimentalForeignApi::class)
 actual typealias PlatformBitmap = UIImage
 
-actual fun loadTemplateBitmap(assetPath: String): PlatformBitmap {
+actual suspend fun loadTemplateBitmap(assetPath: String): PlatformBitmap {
     if (assetPath.startsWith("/")) {
         return UIImage.imageWithContentsOfFile(assetPath)
             ?: throw NullPointerException("Template image not found at $assetPath")
     }
-    val fileName = assetPath.substringAfterLast('/').substringBeforeLast('.')
-    return UIImage.imageNamed(fileName)
-        ?: throw NullPointerException("Template image '$fileName' not found in bundle")
+    val bytes = Res.readBytes("files/$assetPath")
+    return UIImage.imageWithData(bytes.toNSData())
+        ?: throw NullPointerException("Template image '$assetPath' not found in resources")
 }
 
 @OptIn(ExperimentalForeignApi::class)
@@ -337,11 +342,12 @@ actual fun extractFrames(path: String, startMs: Long, endMs: Long, fps: Int): Li
     return emptyList()
 }
 
-@OptIn(ExperimentalForeignApi::class)
-actual fun loadBundledGifNames(): List<String> = emptyList()
-
-actual fun loadBundledGifBytes(name: String): ByteArray? = null
+actual suspend fun loadBundledGifBytes(name: String): ByteArray? = try {
+    Res.readBytes("files/gifs/$name")
+} catch (e: Exception) {
+    null
+}
 
 actual fun decodeGifFrames(bytes: ByteArray): List<MediaFrame> = emptyList()
 
-actual fun copyBundledGifToTempFile(name: String): String? = null
+actual suspend fun copyBundledGifToTempFile(name: String): String? = null
