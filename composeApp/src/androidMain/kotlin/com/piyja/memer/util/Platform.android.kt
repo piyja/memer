@@ -67,11 +67,27 @@ actual fun renderMeme(
 
         val cx = positioned.xRatio * mutable.width
         val baselineY = positioned.yRatio * mutable.height + textSize * 0.35f
+
+        val textWidth = fillPaint.measureText(formatted)
+        val textAscent = fillPaint.ascent().toFloat()
+        val blockLeft = cx - textWidth / 2f - textSize * 0.12f
+        val blockTop = baselineY + textAscent - textSize * 0.25f
+        val blockRight = cx + textWidth / 2f + textSize * 0.12f
+        val blockBottom = baselineY - textAscent + textSize * 0.08f
+        val blockPaint = Paint().apply {
+            color = android.graphics.Color.argb(128, 0, 0, 0)
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(
+            blockLeft, blockTop, blockRight, blockBottom,
+            textSize * 0.12f, textSize * 0.12f,
+            blockPaint
+        )
+
         canvas.drawText(formatted, cx, baselineY, strokePaint)
         canvas.drawText(formatted, cx, baselineY, fillPaint)
 
         if (positioned.strike) {
-            val textWidth = fillPaint.measureText(formatted)
             val midY = baselineY - textSize * 0.35f
             val strikePaint = Paint().apply {
                 color = positioned.color.toInt()
@@ -186,6 +202,49 @@ actual fun saveGifToAppStorage(bytes: ByteArray, id: String): String? {
         file.writeBytes(bytes)
         file.name
     } catch (e: Exception) {
+        null
+    }
+}
+
+actual fun saveGifToGallery(bytes: ByteArray): String? {
+    val resolver = appContext.contentResolver
+    val fileName = "memer_${System.currentTimeMillis()}.gif"
+
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+        put(MediaStore.Images.Media.MIME_TYPE, "image/gif")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(
+                MediaStore.Images.Media.RELATIVE_PATH,
+                "${Environment.DIRECTORY_PICTURES}/Memer"
+            )
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+    }
+
+    val uri: Uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        ?: return null
+
+    return try {
+        resolver.openOutputStream(uri)?.use { output ->
+            output.write(bytes)
+        } ?: return null
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        } else {
+            MediaScannerConnection.scanFile(
+                appContext,
+                arrayOf(uri.toString()),
+                arrayOf("image/gif"),
+                null
+            )
+        }
+        uri.toString()
+    } catch (e: SecurityException) {
+        resolver.delete(uri, null, null)
         null
     }
 }

@@ -32,8 +32,11 @@ import platform.Foundation.NSUserDomainMask
 import platform.Foundation.create
 import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.writeToFile
+import platform.Photos.PHAssetChangeRequest
+import platform.Photos.PHPhotoLibrary
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
+import platform.UIKit.UIBezierPath
 import platform.UIKit.UIFont
 import platform.UIKit.UIColor
 import platform.UIKit.UIGraphicsBeginImageContextWithOptions
@@ -161,16 +164,35 @@ private fun drawCenteredMemeText(
 
     val x = centerX - (textSize.first / 2.0)
     val y = centerY - (textSize.second / 2.0)
+
+    val ctx = UIGraphicsGetCurrentContext()
+    if (ctx != null) {
+        val pad = (fontSize * 0.12f).toDouble()
+        val blockRect = CGRectMake(
+            centerX - textSize.first / 2.0 - pad,
+            centerY - textSize.second / 2.0 - pad * 0.6,
+            textSize.first + pad * 2,
+            textSize.second + pad * 1.8
+        )
+        val blockColor = UIColor(red = 0.0, green = 0.0, blue = 0.0, alpha = 0.5)
+        val bezierPath = UIBezierPath.bezierPathWithRoundedRect(
+            blockRect,
+            cornerRadius = (fontSize * 0.12f).toDouble()
+        )
+        blockColor.setFill()
+        bezierPath.fill()
+    }
+
     nsText.drawAtPoint(platform.CoreGraphics.CGPointMake(x, y), withAttributes = attrs)
 
     if (strike) {
-        val ctx = UIGraphicsGetCurrentContext()
-        if (ctx != null) {
-            platform.CoreGraphics.CGContextSetStrokeColorWithColor(ctx, argbToUIColor(color).CGColor)
-            platform.CoreGraphics.CGContextSetLineWidth(ctx, (fontSize * 0.08f).toDouble())
-            platform.CoreGraphics.CGContextMoveToPoint(ctx, centerX - textSize.first / 2.0, centerY)
-            platform.CoreGraphics.CGContextAddLineToPoint(ctx, centerX + textSize.first / 2.0, centerY)
-            platform.CoreGraphics.CGContextStrokePath(ctx)
+        val strikeCtx = UIGraphicsGetCurrentContext()
+        if (strikeCtx != null) {
+            platform.CoreGraphics.CGContextSetStrokeColorWithColor(strikeCtx, argbToUIColor(color).CGColor)
+            platform.CoreGraphics.CGContextSetLineWidth(strikeCtx, (fontSize * 0.08f).toDouble())
+            platform.CoreGraphics.CGContextMoveToPoint(strikeCtx, centerX - textSize.first / 2.0, centerY)
+            platform.CoreGraphics.CGContextAddLineToPoint(strikeCtx, centerX + textSize.first / 2.0, centerY)
+            platform.CoreGraphics.CGContextStrokePath(strikeCtx)
         }
     }
 }
@@ -311,6 +333,25 @@ actual fun shareGifFile(filePath: String) {
 actual fun copyGifToClipboard(filePath: String) {
     val data = NSFileManager.defaultManager.contentsAtPath(filePath) ?: return
     UIPasteboard.generalPasteboard.setData(data, "com.compuserve.gif")
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun saveGifToGallery(bytes: ByteArray): String? {
+    val tempPath = writeGifBytes(bytes, "temp_save") ?: return null
+    val url = platform.Foundation.NSURL.fileURLWithPath(tempPath)
+    var savedUri: String? = null
+    val semaphore = platform.darwin.dispatch_semaphore_create(0)
+    PHPhotoLibrary.sharedPhotoLibrary().performChanges({
+        PHAssetChangeRequest.creationRequestForAssetFromImageAtFileURL(url)
+    }) { success, error ->
+        if (success) {
+            savedUri = url.absoluteString
+        }
+        platform.darwin.dispatch_semaphore_signal(semaphore)
+    }
+    platform.darwin.dispatch_semaphore_wait(semaphore, platform.darwin.DISPATCH_TIME_FOREVER)
+    NSFileManager.defaultManager.removeItemAtPath(tempPath, null)
+    return savedUri
 }
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)

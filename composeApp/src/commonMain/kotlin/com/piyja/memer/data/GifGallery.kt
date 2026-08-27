@@ -7,6 +7,7 @@ import com.piyja.memer.util.deleteGalleryEntry
 import com.piyja.memer.util.listGalleryEntryIds
 import com.piyja.memer.util.readGalleryEntry
 import com.piyja.memer.util.saveGifToAppStorage
+import com.piyja.memer.util.saveGifToGallery
 import com.piyja.memer.util.saveRenderedMemeImage
 import com.piyja.memer.util.writeGalleryEntry
 import kotlin.random.Random
@@ -37,6 +38,7 @@ object GifGallery {
     ): GifMeme? {
         val id = "gif-" + Random.nextLong().toString(16)
         val gifFileName = saveGifToAppStorage(gifBytes, id) ?: return null
+        saveGifToGallery(gifBytes)
         val thumbFileName = saveRenderedMemeImage(thumb, id) ?: return null
         val meme = GifMeme(
             id = id,

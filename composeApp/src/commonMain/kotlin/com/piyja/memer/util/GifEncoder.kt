@@ -1,15 +1,16 @@
 package com.piyja.memer.util
 
 /**
- * Minimal animated-GIF encoder that runs entirely in Kotlin common code.
+ * Animated-GIF encoder running in Kotlin common code.
  *
- * Strategy: a fixed 6x6x6 (216 colour) palette is used for every frame, so the
- * whole animation shares one global colour table. Each frame's pixels are
- * quantised to that palette and run through standard GIF LZW compression.
+ * Builds a 256-colour palette from the most frequent colours across all
+ * frames (always including black and white for text contrast), then
+ * quantises each frame using nearest-neighbour matching on the 8-neighbour
+ * cube around each candidate.
  */
 object GifEncoder {
 
-    private const val MIN_CODE_SIZE = 8 // 256-entry global colour table
+    private const val MIN_CODE_SIZE = 8
 
     fun encodeAnimatedGif(
         frames: List<RgbaImage>,
@@ -23,7 +24,7 @@ object GifEncoder {
             "All frames must share the same dimensions"
         }
 
-        val palette = buildPalette()
+        val palette = buildPalette(frames)
         val globalColorTable = buildGlobalColorTable(palette)
         val out = ByteWriter()
 
@@ -31,15 +32,15 @@ object GifEncoder {
         out.writeShort(width)
         out.writeShort(height)
         out.writeByte(0xF7) // global colour table, 256 entries
-        out.writeByte(0) // background colour index
-        out.writeByte(0) // pixel aspect ratio
+        out.writeByte(0)    // background colour index
+        out.writeByte(0)    // pixel aspect ratio
         out.writeBytes(globalColorTable)
         writeNetscapeLoop(out, loop)
 
         frames.forEachIndexed { index, frame ->
             val delayCs = (delaysMs.getOrElse(index) { delaysMs.lastOrNull() ?: 400 } / 10)
                 .coerceAtLeast(2)
-            writeFrame(out, frame, delayCs)
+            writeFrame(out, frame, delayCs, palette)
         }
 
         out.writeByte(0x3B) // trailer
@@ -48,15 +49,32 @@ object GifEncoder {
 
     // --- palette ---------------------------------------------------------
 
-    /** 216 colours: 6 levels per channel. Returns [r,g,b] triples (0..255). */
-    private fun buildPalette(): Array<IntArray> {
-        val palette = Array(216) { IntArray(3) }
-        var i = 0
-        for (lr in 0..5) for (lg in 0..5) for (lb in 0..5) {
-            palette[i][0] = lr * 51
-            palette[i][1] = lg * 51
-            palette[i][2] = lb * 51
-            i++
+    private fun buildPalette(frames: List<RgbaImage>): Array<IntArray> {
+        val freq = HashMap<Int, Int>()
+        for (frame in frames) {
+            val px = frame.pixels
+            var p = 0
+            while (p < px.size) {
+                val color = ((px[p].toInt() and 0xFF) shl 16) or
+                        ((px[p + 1].toInt() and 0xFF) shl 8) or
+                        (px[p + 2].toInt() and 0xFF)
+                freq[color] = (freq[color] ?: 0) + 1
+                p += 4
+            }
+        }
+
+        val sorted = freq.entries.sortedByDescending { it.value }
+        val colors = sorted.take(254).map { it.key }.toMutableList()
+
+        if (0 !in colors) colors.add(0, 0x000000)        // black
+        if (0xFFFFFF !in colors) colors.add(0xFFFFFF)      // white
+
+        val palette = Array(256) { intArrayOf(0, 0, 0) }
+        for (i in 0 until minOf(colors.size, 256)) {
+            val c = colors[i]
+            palette[i][0] = (c shr 16) and 0xFF
+            palette[i][1] = (c shr 8) and 0xFF
+            palette[i][2] = c and 0xFF
         }
         return palette
     }
@@ -71,8 +89,8 @@ object GifEncoder {
         return table
     }
 
-    /** Map an RGBA frame to palette indices using nearest 6-level quantisation. */
-    private fun quantize(frame: RgbaImage): IntArray {
+    /** Quantise an RGBA frame to palette indices via 8-neighbour nearest match. */
+    private fun quantize(frame: RgbaImage, palette: Array<IntArray>): IntArray {
         val indices = IntArray(frame.width * frame.height)
         val px = frame.pixels
         var p = 0
@@ -82,12 +100,34 @@ object GifEncoder {
             val g = px[p + 1].toInt() and 0xFF
             val b = px[p + 2].toInt() and 0xFF
             p += 4
-            val lr = (r * 5 + 127) / 255
-            val lg = (g * 5 + 127) / 255
-            val lb = (b * 5 + 127) / 255
-            indices[i++] = lr * 36 + lg * 6 + lb
+            indices[i++] = nearestColor(r, g, b, palette)
         }
         return indices
+    }
+
+    private fun nearestColor(r: Int, g: Int, b: Int, palette: Array<IntArray>): Int {
+        var best = 0
+        var bestDist = Int.MAX_VALUE
+        val lr = (r * 5 + 127) / 255
+        val lg = (g * 5 + 127) / 255
+        val lb = (b * 5 + 127) / 255
+        for (dr in 0..1) for (dg in 0..1) for (db in 0..1) {
+            val cr = minOf(maxOf(lr + dr, 0), 5)
+            val cg = minOf(maxOf(lg + dg, 0), 5)
+            val cb = minOf(maxOf(lb + db, 0), 5)
+            val idx = cr * 36 + cg * 6 + cb
+            if (idx < palette.size) {
+                val dr2 = r - palette[idx][0]
+                val dg2 = g - palette[idx][1]
+                val db2 = b - palette[idx][2]
+                val dist = dr2 * dr2 + dg2 * dg2 + db2 * db2
+                if (dist < bestDist) {
+                    bestDist = dist
+                    best = idx
+                }
+            }
+        }
+        return best
     }
 
     // --- structure writers ----------------------------------------------
@@ -103,8 +143,7 @@ object GifEncoder {
         out.writeByte(0x00)
     }
 
-    private fun writeFrame(out: ByteWriter, frame: RgbaImage, delayCs: Int) {
-        // Graphic Control Extension
+    private fun writeFrame(out: ByteWriter, frame: RgbaImage, delayCs: Int, palette: Array<IntArray>) {
         out.writeByte(0x21)
         out.writeByte(0xF9)
         out.writeByte(0x04)
@@ -113,17 +152,15 @@ object GifEncoder {
         out.writeByte(0x00) // transparent colour index
         out.writeByte(0x00)
 
-        // Image Descriptor
         out.writeByte(0x2C)
-        out.writeShort(0) // left
-        out.writeShort(0) // top
+        out.writeShort(0)
+        out.writeShort(0)
         out.writeShort(frame.width)
         out.writeShort(frame.height)
         out.writeByte(0x00) // no local colour table
 
-        // Image data
         out.writeByte(MIN_CODE_SIZE)
-        val lzw = lzwEncode(quantize(frame), MIN_CODE_SIZE)
+        val lzw = lzwEncode(quantize(frame, palette), MIN_CODE_SIZE)
         var offset = 0
         while (offset < lzw.size) {
             val blockSize = minOf(255, lzw.size - offset)
@@ -240,4 +277,5 @@ object GifEncoder {
 
         fun toByteArray(): ByteArray = bytes.toByteArray()
     }
+
 }

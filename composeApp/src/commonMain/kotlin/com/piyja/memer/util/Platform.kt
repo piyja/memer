@@ -125,3 +125,6 @@ expect fun shareGifFile(filePath: String)
 
 /** Copy a staged GIF file to the clipboard. */
 expect fun copyGifToClipboard(filePath: String)
+
+/** Save GIF bytes to the device's Pictures/Gallery. Returns the URI string or null. */
+expect fun saveGifToGallery(bytes: ByteArray): String?

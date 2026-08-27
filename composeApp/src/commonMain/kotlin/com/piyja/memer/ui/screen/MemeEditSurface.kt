@@ -306,6 +306,7 @@ private fun DraggableMemeText(
                     (box.yRatio * areaSize.height).roundToInt() - selfSize.height / 2
                 )
             }
+            .background(Color.Black.copy(alpha = 0.5f))
             .onSizeChanged { selfSize = it }
             .then(
                 if (isSelected) {

@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -22,14 +24,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,7 +58,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.piyja.memer.data.GifGallery
 import com.piyja.memer.data.GifMeme
 import com.piyja.memer.data.GifProject
@@ -124,6 +136,7 @@ fun GifVideoEditorScreen(
     var previewIndex by remember { mutableStateOf(0) }
     var status by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     val clipDurationMs = (trimEndMs - trimStartMs).toLong().coerceAtLeast(0L)
 
@@ -210,141 +223,239 @@ fun GifVideoEditorScreen(
         )
     }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            TopAppBar(
-                title = { Text("Edit GIF") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.width(300.dp)
+            ) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                ) {
+                    if (sourcePath != null && mediaInfo != null) {
+                        val durationSecs = oneDecimal(mediaInfo!!.durationMs / 1000.0)
+                        val totalMs = mediaInfo!!.durationMs.toFloat().coerceAtLeast(1f)
+
+                        SettingsCard(title = "Trim") {
+                            Text("${secs(trimStartMs)}s \u2013 ${secs(trimEndMs)}s", style = MaterialTheme.typography.bodySmall)
+                            RangeSlider(
+                                value = trimStartMs..trimEndMs,
+                                onValueChange = { range ->
+                                    trimStartMs = range.start.coerceAtMost(range.endInclusive - 100f)
+                                    trimEndMs = range.endInclusive.coerceAtLeast(range.start + 100f)
+                                },
+                                valueRange = 0f..totalMs
+                            )
+                        }
+
+                        SettingsCard(title = "Playback") {
+                            Text("${fps.toInt()} fps", style = MaterialTheme.typography.bodySmall)
+                            Slider(value = fps, onValueChange = { fps = it }, valueRange = 2f..30f, steps = 28)
+                            if (isExtracting) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Extracting frames...", style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                Text("Clip: ${secs(clipDurationMs.toFloat())}s \u2022 ${frames.size} frames", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Text Sections",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        sections.forEachIndexed { idx, sec ->
+                            SectionEditor(
+                                section = sec,
+                                clipDurationMs = clipDurationMs,
+                                onUpdate = { updated ->
+                                    sections = sections.toMutableList().also { it[idx] = updated }
+                                },
+                                onRemove = { sections = sections.filter { it.id != sec.id } }
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val start = (clipDurationMs / (sections.size + 1))
+                                sections = sections + makeSection(start, clipDurationMs)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Add Section") }
+
+                        Spacer(Modifier.height(16.dp))
                     }
                 }
-            )
-        },
-        bottomBar = {
-            Row(
-                Modifier.fillMaxWidth().padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Button(onClick = {
-                    status = if (generate() != null) "Saved to Your GIFs" else "Failed to generate"
-                }) { Text("Save") }
-                OutlinedButton(onClick = {
-                    scope.launch {
-                        val saved = generate()
-                        val bytes = saved?.let { GifGallery.get(it.id)?.loadGifBytes() }
-                        if (bytes != null) shareGifFile(stageShareableGif(bytes))
-                    }
-                }) { Text("Share") }
-                OutlinedButton(onClick = {
-                    val saved = generate()
-                    val bytes = saved?.let { GifGallery.get(it.id)?.loadGifBytes() }
-                    if (bytes != null) copyGifToClipboard(stageShareableGif(bytes))
-                    status = "Copied to clipboard"
-                }) { Text("Copy") }
             }
         }
-    ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-        ) {
-            if (sourcePath == null || mediaInfo == null) {
-                Text("Loading media…")
-                return@Column
-            }
-            val durationSecs = oneDecimal(mediaInfo!!.durationMs / 1000.0)
-            Text("Source length: ${durationSecs}s  •  Frames: ${frames.size}")
-            Spacer(Modifier.height(8.dp))
-
-            val totalMs = mediaInfo!!.durationMs.toFloat().coerceAtLeast(1f)
-            Text("Trim: ${secs(trimStartMs)}s – ${secs(trimEndMs)}s  (total ${secs(totalMs)}s)")
-            RangeSlider(
-                value = trimStartMs..trimEndMs,
-                onValueChange = { range ->
-                    trimStartMs = range.start.coerceAtMost(range.endInclusive - 100f)
-                    trimEndMs = range.endInclusive.coerceAtLeast(range.start + 100f)
-                },
-                valueRange = 0f..totalMs
-            )
-            Text("Frames per second: ${fps.toInt()}")
-            Slider(value = fps, onValueChange = { fps = it }, valueRange = 2f..30f, steps = 28)
-            Spacer(Modifier.height(8.dp))
-
-            if (isExtracting) CircularProgressIndicator() else Text("Trimmed clip: ${secs(clipDurationMs.toFloat())}s")
-            Spacer(Modifier.height(8.dp))
-
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                val img: ImageBitmap? =
-                    frames.getOrNull(if (previewPlaying) previewIndex else 0)
-                        ?.bitmap?.let { platformBitmapToImageBitmap(it) }
-                img?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(onClick = { previewPlaying = !previewPlaying }) {
-                    Text(if (previewPlaying) "Stop" else "Preview")
-                }
-                Text(
-                    "Frame ${if (frames.isNotEmpty()) (if (previewPlaying) previewIndex else 0) + 1 else 0}/${frames.size}"
+    ) {
+        Scaffold(
+            modifier = modifier,
+            topBar = {
+                TopAppBar(
+                    title = { Text("Edit GIF") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            scope.launch { drawerState.open() }
+                        }) {
+                            Icon(Icons.Default.Menu, "Settings")
+                        }
+                        IconButton(onClick = {
+                            scope.launch {
+                                val saved = generate()
+                                val bytes = saved?.let { GifGallery.get(it.id)?.loadGifBytes() }
+                                if (bytes != null) shareGifFile(stageShareableGif(bytes))
+                            }
+                        }) {
+                            Icon(Icons.Default.Share, "Share")
+                        }
+                        IconButton(onClick = {
+                            val saved = generate()
+                            val bytes = saved?.let { GifGallery.get(it.id)?.loadGifBytes() }
+                            if (bytes != null) copyGifToClipboard(stageShareableGif(bytes))
+                            status = "Copied to clipboard"
+                        }) {
+                            Icon(Icons.Default.ContentCopy, "Copy")
+                        }
+                        Button(onClick = {
+                            status = if (generate() != null) "Saved to Your GIFs" else "Failed"
+                        }) {
+                            Text("Save")
+                        }
+                    }
                 )
             }
-            Spacer(Modifier.height(8.dp))
+        ) { padding ->
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                if (sourcePath == null || mediaInfo == null) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Loading media\u2026")
+                    }
+                    return@Scaffold
+                }
 
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(frames.size) { i ->
-                    val img = platformBitmapToImageBitmap(frames[i].bitmap)
-                    Image(
-                        bitmap = img,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clickable { previewPlaying = false; previewIndex = i }
-                            .border(
-                                if (i == previewIndex && !previewPlaying) 2.dp else 0.dp,
-                                Color.White
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val img: ImageBitmap? =
+                        frames.getOrNull(if (previewPlaying) previewIndex else 0)
+                            ?.bitmap?.let { platformBitmapToImageBitmap(it) }
+                    img?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+
+                    val activeSection = remember(previewIndex, previewPlaying, sections, frames) {
+                        val idx = if (previewPlaying) previewIndex else 0
+                        var cum = 0L
+                        for (j in 0 until idx) cum += frames[j].durationMs
+                        sections.firstOrNull { cum >= it.startMs && cum < it.endMs }
+                    }
+                    activeSection?.positionedText()?.let { pt ->
+                        Text(
+                            text = pt.text.trim().uppercase(),
+                            color = Color(pt.color),
+                            fontSize = (16 + 16 * pt.scale).sp,
+                            fontWeight = if (pt.bold) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                                .absoluteOffset(
+                                    x = ((pt.xRatio - 0.5f) * 300).dp,
+                                    y = ((pt.yRatio - 0.5f) * 160).dp
+                                )
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { previewPlaying = !previewPlaying },
+                        modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
+                    ) {
+                        Text(
+                            if (previewPlaying) "\u23F9" else "\u25B6",
+                            fontSize = 24.sp,
+                            color = Color.White
+                        )
+                    }
+                    Text(
+                        "${if (frames.isNotEmpty()) (if (previewPlaying) previewIndex else 0) + 1 else 0}/${frames.size}",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                    )
+                }
+
+                if (frames.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.8f)),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(frames.size) { i ->
+                            val img = platformBitmapToImageBitmap(frames[i].bitmap)
+                            Image(
+                                bitmap = img,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clickable { previewPlaying = false; previewIndex = i }
+                                    .border(
+                                        if (i == previewIndex && !previewPlaying) 2.dp else 0.dp,
+                                        Color.White
+                                    )
                             )
+                        }
+                    }
+                }
+
+                status?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(Modifier.height(16.dp))
-            Text("Text sections", style = MaterialTheme.typography.titleMedium)
-            sections.forEachIndexed { idx, sec ->
-                SectionEditor(
-                    section = sec,
-                    clipDurationMs = clipDurationMs,
-                    onUpdate = { updated ->
-                        sections = sections.toMutableList().also { it[idx] = updated }
-                    },
-                    onRemove = { sections = sections.filter { it.id != sec.id } }
-                )
-            }
-            OutlinedButton(
-                onClick = {
-                    val start = (clipDurationMs / (sections.size + 1))
-                    sections = sections + makeSection(start, clipDurationMs)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Add section") }
-
-            Spacer(Modifier.height(8.dp))
-            status?.let {
-                Text(it, color = MaterialTheme.colorScheme.primary)
-            }
+@Composable
+private fun SettingsCard(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(4.dp))
+            content()
         }
     }
 }
@@ -357,82 +468,102 @@ private fun SectionEditor(
     onRemove: () -> Unit
 ) {
     var text by remember(section.id) { mutableStateOf(section.text) }
+    var expanded by remember(section.id) { mutableStateOf(false) }
     val maxMs = clipDurationMs.toFloat().coerceAtLeast(1f)
 
     Card(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         shape = RoundedCornerShape(8.dp)
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column {
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Section", style = MaterialTheme.typography.labelLarge)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text.ifEmpty { "New Section" },
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1
+                    )
+                    Text(
+                        "${secs(section.startMs.toFloat())}s \u2013 ${secs(section.endMs.toFloat())}s",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
                 IconButton(onClick = onRemove) {
-                    Icon(Icons.Filled.Delete, "Remove section")
+                    Icon(Icons.Filled.Delete, "Remove section", Modifier.size(20.dp))
                 }
             }
 
-            OutlinedTextField(
-                value = text,
-                onValueChange = {
-                    text = it
-                    onUpdate(section.copy(text = it))
-                },
-                label = { Text("Text") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (expanded) {
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = {
+                            text = it
+                            onUpdate(section.copy(text = it))
+                        },
+                        label = { Text("Text") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-            Text("Start: ${secs(section.startMs.toFloat())}s")
-            Slider(
-                value = section.startMs.toFloat(),
-                onValueChange = { onUpdate(section.copy(startMs = it.toLong().coerceAtMost(section.endMs - 50))) },
-                valueRange = 0f..maxMs
-            )
-            Text("End: ${secs(section.endMs.toFloat())}s")
-            Slider(
-                value = section.endMs.toFloat(),
-                onValueChange = { onUpdate(section.copy(endMs = it.toLong().coerceAtLeast(section.startMs + 50))) },
-                valueRange = 0f..maxMs
-            )
+                    Text("Start: ${secs(section.startMs.toFloat())}s", style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = section.startMs.toFloat(),
+                        onValueChange = { onUpdate(section.copy(startMs = it.toLong().coerceAtMost(section.endMs - 50))) },
+                        valueRange = 0f..maxMs
+                    )
+                    Text("End: ${secs(section.endMs.toFloat())}s", style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = section.endMs.toFloat(),
+                        onValueChange = { onUpdate(section.copy(endMs = it.toLong().coerceAtLeast(section.startMs + 50))) },
+                        valueRange = 0f..maxMs
+                    )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                GIF_TEXT_COLORS.forEach { c ->
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .background(Color(c))
-                            .clickable { onUpdate(section.copy(color = c)) }
-                            .border(if (section.color == c) 2.dp else 0.dp, Color.White)
+                    Spacer(Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        GIF_TEXT_COLORS.forEach { c ->
+                            Box(
+                                Modifier
+                                    .size(28.dp)
+                                    .background(Color(c))
+                                    .clickable { onUpdate(section.copy(color = c)) }
+                                    .border(if (section.color == c) 2.dp else 0.dp, Color.White)
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = section.bold, onCheckedChange = { onUpdate(section.copy(bold = it)) })
+                        Text("Bold")
+                    }
+
+                    Text("X: " + twoDecimal(section.xRatio.toDouble()), style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = section.xRatio,
+                        onValueChange = { onUpdate(section.copy(xRatio = it)) },
+                        valueRange = 0f..1f
+                    )
+                    Text("Y: " + twoDecimal(section.yRatio.toDouble()), style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = section.yRatio,
+                        onValueChange = { onUpdate(section.copy(yRatio = it)) },
+                        valueRange = 0f..1f
+                    )
+                    Text("Size: " + twoDecimal(section.scale.toDouble()), style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = section.scale,
+                        onValueChange = { onUpdate(section.copy(scale = it)) },
+                        valueRange = 0.5f..3f
                     )
                 }
             }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = section.bold, onCheckedChange = { onUpdate(section.copy(bold = it)) })
-                Text("Bold")
-            }
-
-            Text("X: " + twoDecimal(section.xRatio.toDouble()))
-            Slider(
-                value = section.xRatio,
-                onValueChange = { onUpdate(section.copy(xRatio = it)) },
-                valueRange = 0f..1f
-            )
-            Text("Y: " + twoDecimal(section.yRatio.toDouble()))
-            Slider(
-                value = section.yRatio,
-                onValueChange = { onUpdate(section.copy(yRatio = it)) },
-                valueRange = 0f..1f
-            )
-            Text("Size: " + twoDecimal(section.scale.toDouble()))
-            Slider(
-                value = section.scale,
-                onValueChange = { onUpdate(section.copy(scale = it)) },
-                valueRange = 0.5f..3f
-            )
         }
     }
 }
