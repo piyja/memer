@@ -58,5 +58,10 @@ object GifGallery {
         _memes.value = _memes.value.filter { it.id != id }
     }
 
+    fun removeAll(ids: Set<String>) {
+        ids.forEach { deleteGalleryEntry(it) }
+        _memes.value = _memes.value.filter { it.id !in ids }
+    }
+
     fun get(id: String): GifMeme? = _memes.value.firstOrNull { it.id == id }
 }
